@@ -1,0 +1,79 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  releaseName: argocd
+  chart:
+    spec:
+      chart: argo-cd
+      sourceRef:
+        kind: HelmRepository
+        name: argocd
+        namespace: flux-system
+      version: 5.36.11
+  interval: 5m
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+  values:
+    redis:
+      image:
+        repository: "docker/library/redis"
+    global:
+      image:
+        repository: "argoproj/argocd"
+    dex:
+      image:
+        repository: "dexidp/dex"
+    server:
+      ingress:
+        enabled: true
+        annotations:
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: argocd.k8s.local
+          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+          nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+          nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+        hosts:
+          - argocd.k8s.local
+        extraPaths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  name: https
+        tls:
+          - secretName: argocd-secret
+            hosts:
+              - argocd.k8s.local
+      config:
+        url: "https://argocd.k8s.local"
+      rbacConfig:
+        policy.csv: |
+          p, role:dev, applications, get, *-dev/*, allow
+          p, role:dev, applications, create, *-dev/*, allow
+          p, role:dev, applications, update, *-dev/*, allow
+          p, role:dev, applications, delete, *-dev/*, allow
+          p, role:dev, applications, sync, *-dev/*, allow
+          p, role:dev, applications, override, *-dev/*, allow
+          p, role:dev, applications, action/*, *-dev/*, allow
+          p, role:dev, projects, get, *-dev, allow
+          p, role:dev, projects, create, *-dev, allow
+          p, role:dev, clusters, get, *dev*, allow
+          p, role:dev, clusters, get, *prod*, allow
+          p, role:dev, repositories, get, *, allow
+          p, role:dev, repositories, create, *, allow
+          p, role:dev, repositories, update, *, allow
+          p, role:dev, repositories, delete, *, allow
+
+          g, Admins, role:admin
+      secret: 
+        argocdServerAdminPassword: $argo-admin:admin.password
+

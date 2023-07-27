@@ -1,0 +1,195 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager.yaml
+  - trident.yaml
+  - renovate.yaml
+  - ../common/gitlab-runner
+  - ../common/prometheus
+  - ../common/awx-operator
+  - ../common/fluxcd-dashboard
+  - ../common/argocd
+  - ../common/loki
+  - ../common/keycloak
+  - ../common/vault-injector
+  # - awx-secret-postgres.yaml
+  - pvc.yaml
+
+patches:
+  - target:
+      kind: HelmRelease
+      name: gitlab-runner
+    patch: |-
+      - op: add
+        path: /spec/values/runners/tags
+        value: "k8s-devinfra"
+      - op: add
+        path: /spec/values/runners/name
+        value: "runner-k8s-devinfra"
+
+  - target:
+      kind: HelmRelease
+      name: vault
+    patch: |-
+      - op: add
+        path: /spec/values/injector/authPath
+        value: "auth/kube-devinfra"
+
+  # - target:
+  #     kind: HelmRelease
+  #     name: argocd
+  #   patch: |-
+  #     - op: add
+  #       path: /spec/values/server/credentialTemplates/cmp-creds/url
+  #       value: https://gitlab.imprimerienationale.fr/infra-linux/cmp.git
+  #     - op: add
+  #       path: /spec/values/server/credentialTemplates/cmp-creds/password
+  #       value: $gitlab-cmp-token:password
+  #     - op: add
+  #       path: /spec/values/server/credentialTemplates/cmp-creds/username
+  #       value: gitlab-cmp-deploy-token
+
+  - target:
+      kind: HelmRelease
+      name: prometheus
+    patch: |-
+      - op: replace
+        path: /spec/values/kubeEtcd/endpoints
+        value: 
+          - 172.17.7.48
+          - 172.17.7.49
+          - 172.17.7.50 
+      - op: add
+        path: /spec/values/grafana/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: grafana.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/grafana/ingress/hosts
+        value: 
+          - grafana.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/grafana/ingress/tls/0/hosts
+        value: 
+          - grafana.devinfra.k8s.groupein.local      
+      - op: replace
+        path: /spec/values/prometheus/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: prometheus.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/prometheus/ingress/hosts
+        value: 
+          - prometheus.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/prometheus/ingress/tls/0/hosts
+        value: 
+          - prometheus.devinfra.k8s.groupein.local    
+      - op: replace
+        path: /spec/values/prometheus/prometheusSpec/additionalScrapeConfigs
+        value:
+          - job_name: consul-scfn-ppd
+            scheme: http
+            metrics_path: '/v1/agent/metrics'
+            params:
+              format: ["prometheus"]
+            static_configs:
+              - targets: ['qlscfncons01in.service.groupein.local:8500','qlscfncons02in.service.groupein.local:8500','qlscfncons03in.service.groupein.local:8500','qlscfnmicr01in.service.groupein.local:8500','qlscfnspgw01in.service.groupein.local:8500']
+                labels:
+                  datacenter: SCFN
+            relabel_configs:
+              - source_labels: ['__address__']
+                regex: '(.*):8500'
+                target_label: instance
+                replacement: $1
+                action: replace
+          - job_name: foreman-osversion
+            scrape_interval: 60s
+            scheme: http
+            metrics_path: '/metrics'
+            static_configs:
+              - targets: ['plvitsrepo01in.groupein.local:3000']
+            relabel_configs:
+              - source_labels: ['__address__']
+                regex: '(.*):3000'
+                target_label: instance
+                replacement: $1
+                action: replace
+          - job_name: mongo
+            scrape_interval: 60s
+            scheme: http
+            metrics_path: '/metrics'
+            static_configs:
+              - targets: ['blcqcddbmg01in.service.groupein.local:9216']
+            relabel_configs:
+              - source_labels: ['__address__']
+                regex: '(.*):9216'
+                target_label: instance
+                replacement: $1
+                action: replace
+
+  - target:
+      kind: HelmRelease
+      name: awx-operator
+    patch: |-
+      - op: replace
+        path: /spec/values/AWX/spec/hostname
+        value: awx.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/AWX/spec/ingress_annotations
+        value: |
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: awx.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/AWX/spec/web_resource_requirements/requests/cpu
+        value: 300m
+      - op: replace
+        path: /spec/values/AWX/spec/web_resource_requirements/requests/memory
+        value: 384Mi
+      - op: replace
+        path: /spec/values/AWX/spec/web_resource_requirements/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/values/AWX/spec/web_resource_requirements/limits/memory
+        value: 1Gi
+      - op: replace
+        path: /spec/values/AWX/spec/task_resource_requirements/requests/cpu
+        value: 300m
+      - op: replace
+        path: /spec/values/AWX/spec/task_resource_requirements/requests/memory
+        value: 384Mi
+      - op: replace
+        path: /spec/values/AWX/spec/task_resource_requirements/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/values/AWX/spec/task_resource_requirements/limits/memory
+        value: 1Gi
+      - op: replace
+        path: /spec/values/AWX/spec/ee_resource_requirements/requests/cpu
+        value: 300m
+      - op: replace
+        path: /spec/values/AWX/spec/ee_resource_requirements/requests/memory
+        value: 384Mi
+      - op: replace
+        path: /spec/values/AWX/spec/ee_resource_requirements/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/values/AWX/spec/ee_resource_requirements/limits/memory
+        value: 1Gi
+
+  - target:
+      kind: HelmRelease
+      name: fluxcd-dashboard
+    patch: |-
+      - op: add
+        path: /spec/values/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: fluxcd.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/ingress/hosts/0/host
+        value: fluxcd.devinfra.k8s.groupein.local
+      - op: replace
+        path: /spec/values/ingress/tls/0/hosts
+        value: 
+          - fluxcd.devinfra.k8s.groupein.local

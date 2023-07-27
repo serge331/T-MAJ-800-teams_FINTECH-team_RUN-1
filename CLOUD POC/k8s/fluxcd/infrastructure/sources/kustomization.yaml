@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flux-system
+resources:
+  - ca-cert.yaml
+  - awx-operator.yaml
+  - gitlab.yaml
+  - jetstack.yaml
+  - prometheus.yaml
+  - trident.yaml
+  - weave.yaml
+  - argocd.yaml
+  - grafana.yaml
+  - bitnami.yaml
+  - vault.yaml

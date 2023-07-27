@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: renovate
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: renovate-env
+  namespace: renovate
+type: Opaque
+stringData:
+  RENOVATE_AUTODISCOVER: 'false'
+  RENOVATE_ENDPOINT: 'https://gitlab.imprimerienationale.fr/api/v4'
+  RENOVATE_GIT_AUTHOR: 'Renovate Bot <renovatebot@ingroupe.com>'
+  RENOVATE_PLATFORM: 'gitlab'
+  RENOVATE_TOKEN: 'glpat--kzB__9ZFqEAKUzNUfz4'
+  RENOVATE_CONFIG_FILE: '/opt/renovate/config.json'
+  RENOVATE_BASE_DIR: '/tmp/renovate/'
+  GIT_SSL_NO_VERIFY: '1'
+  NODE_TLS_REJECT_UNAUTHORIZED: '0'
+  LOG_LEVEL: 'debug'
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: renovate-config
+  namespace: renovate
+data:
+  config.json: |-
+    {
+      "enabled": "true",
+      "githubTokenWarn": "false",
+      "timezone": "Europe/Paris",
+      "repositories": ["ansible/ansible-K8S"],
+      "ignorePaths": ["**/roles/**","**/deploy-*.yml","**/update/**","**/inventory/**"],
+      "flux": { "fileMatch": ["fluxcd/.+\\.yaml$"]},
+      "baseBranches": ["developpement"],
+      "packageRules": [
+        {
+          "datasources": ["helm"],
+          "commitMessageTopic": "Helm chart {{depName}}",
+          "semanticCommitScope": "charts",
+          "separateMinorPatch": true,
+          "ignoreDeprecated": true
+        },
+        {
+          "datasources": ["docker"],
+          "registryUrls": ["https://registry.groupein.local:9082"],
+          "commitMessageTopic": "Docker image {{depName}}",
+          "commitMessageExtra": "to {{#if isSingleVersion}}{{{toVersion}}}{{else}}{{{newValue}}}{{/if}}",
+          "updateTypes": ["major", "minor", "patch"],
+          "enabled": true
+        },
+        {
+          "matchDatasources": ["docker"],
+          "semanticCommitScope": "images",
+          "separateMinorPatch": true
+        },
+        {
+          "matchDatasources": ["docker"],
+          "matchUpdateTypes": ["major"],
+          "commitMessagePrefix": "feat(images)!: ",
+          "labels": ["renovate/image", "dep/major"]
+        },
+        {
+          "matchDatasources": ["docker"],
+          "matchUpdateTypes": ["minor"],
+          "semanticCommitType": "feat",
+          "labels": ["renovate/image", "dep/minor"]
+        },
+        {
+          "matchDatasources": ["docker"],
+          "matchUpdateTypes": ["patch"],
+          "semanticCommitType": "fix",
+          "labels": ["renovate/image", "dep/patch"]
+        }
+      ]
+    }
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: renovate-bot
+  namespace: renovate
+spec:
+  schedule: '@weekly'
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - image: registry.groupein.local:9082/renovate/renovate:35.131-slim
+              name: renovate-bot
+              envFrom:
+                - secretRef:
+                    name: renovate-env
+              volumeMounts:
+                - name: config-volume
+                  mountPath: /opt/renovate/
+                - name: work-volume
+                  mountPath: /tmp/renovate/
+          restartPolicy: Never
+          volumes:
+            - name: config-volume
+              configMap:
+                name: renovate-config
+            - name: work-volume
+              emptyDir: {}

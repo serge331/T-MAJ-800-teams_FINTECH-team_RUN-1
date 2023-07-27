@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-tbc-ontap-nas-secret
+  namespace: trident
+type: Opaque
+stringData:
+  username: vsadmin
+  password: Kub3rneTE$
+---
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-ontap-nas
+  namespace: trident
+spec:
+  version: 1
+  storageDriverName: ontap-nas
+  storagePrefix: devinfra
+  managementLIF: 172.17.7.116
+  dataLIF: 172.17.7.116
+  backendName: tbc-ontap-nas
+  svm: TAKUBESNAS01IN
+  credentials:
+    name: backend-tbc-ontap-nas-secret
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storage-class-test
+provisioner: csi.trident.netapp.io
+mountOptions: ["rw", "nfsvers=3", "proto=udp"]
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  storagePools: "backend-tbc-ontap-nas"
+  backendType: "ontap-nas"
+  media: "hdd"
+  provisioningType: "thin"
+  snapshots: "false"
+  encryption: "false"
+  clones: "false"

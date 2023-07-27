@@ -1,0 +1,8 @@
+*
+!.gitignore
+!/machine-learning/
+!/machine-learning/ask_model.py
+!/machine-learning/dataset_accidents.csv
+!/machine-learning/new_model.py
+!/machine-learning/trained_model.joblib
+!/machine-learning/get_model_accuracy.py

@@ -1,0 +1,110 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager.yaml
+  - trident.yaml
+  - ../common/gitlab-runner
+  - ../common/prometheus
+  - ../common/fluxcd-dashboard
+  - ../common/loki
+
+patches:
+  - target:
+      kind: HelmRelease
+      name: gitlab-runner
+    patch: |-
+      - op: add
+        path: /spec/values/runners/tags
+        value: "k8s-poc"
+      - op: add
+        path: /spec/values/runners/name
+        value: "runner-k8s-poc"
+
+  - target:
+      kind: HelmRelease
+      name: argocd
+    patch: |-
+      - op: replace
+        path: /spec/values/server/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: argocd.poc.k8s.groupein.local
+          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+          nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+          nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      - op: replace
+        path: /spec/values/server/ingress/hosts
+        value: 
+          - argocd.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/server/ingress/tls/0/hosts
+        value: 
+          - argocd.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/server/config/url
+        value: 
+          - "https://argocd.poc.k8s.groupein.local"
+
+  - target:
+      kind: HelmRelease
+      name: prometheus
+    patch: |-
+      - op: replace
+        path: /spec/values/kubeEtcd/endpoints
+        value: 
+          - 172.17.7.32
+          - 172.17.7.33
+          - 172.17.7.34
+      - op: add
+        path: /spec/values/grafana/enabled
+        value: false  
+      - op: replace
+        path: /spec/values/prometheus/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: prometheus.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/prometheus/ingress/hosts
+        value: 
+          - prometheus.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/prometheus/ingress/tls/0/hosts
+        value: 
+          - prometheus.poc.k8s.groupein.local    
+
+  - target:
+      kind: HelmRelease
+      name: fluxcd-dashboard
+    patch: |-
+      - op: add
+        path: /spec/values/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: fluxcd.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/ingress/hosts/0/host
+        value: fluxcd.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/ingress/tls/0/hosts
+        value: 
+          - fluxcd.poc.k8s.groupein.local
+
+  - target:
+      kind: HelmRelease
+      name: loki
+    patch: |-
+      - op: add
+        path: /spec/values/loki/ingress/enabled
+        value: true
+      - op: add
+        path: /spec/values/loki/ingress/annotations
+        value: 
+          cert-manager.io/cluster-issuer: vault-issuer
+          cert-manager.io/common-name: loki.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/loki/ingress/hosts/0/host
+        value: loki.poc.k8s.groupein.local
+      - op: replace
+        path: /spec/values/loki/ingress/tls/0/hosts
+        value: 
+          - loki.poc.k8s.groupein.local

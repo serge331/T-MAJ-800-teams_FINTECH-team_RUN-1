@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager.yaml
+  - ../common/gitlab-runner
+  - ../common/prometheus
+  - ../common/fluxcd-dashboard
+  - ../common/loki
+
+patches:
+  - target:
+      kind: HelmRelease
+      name: gitlab-runner
+    patch: |-
+      - op: add
+        path: /spec/values/runners/tags
+        value: "k8s-infra"
+      - op: add
+        path: /spec/values/runners/name
+        value: "runner-k8s-infra"
+
+  - target:
+      kind: HelmRelease
+      name: prometheus
+    patch: |-
+      - op: replace
+        path: /spec/values/kubeEtcd/endpoints
+        value: 
+          - 172.17.110.215
+          - 172.17.110.216
+          - 172.17.110.217
+      - op: replace
+        path: /spec/values/grafana/persistence/enabled
+        value: false
+      - op: replace
+        path: /spec/values/prometheus/prometheusSpec/storageSpec
+        value: {}
+      - op: replace
+        path: /spec/values/prometheus/prometheusSpec/additionalScrapeConfigs
+        value:
+          - job_name: keycloak-siam-dev
+            scheme: https
+            metrics_path: /auth/metrics
+            tls_config:
+              ca_file: /etc/prometheus/secrets/ca-cert/ca.cert
+            static_configs:
+              - targets: [ 'dlsiamkeyk02in.groupein.local:8443' ]
+          - job_name: keycloak-siam-int
+            scheme: https
+            metrics_path: /auth/metrics
+            tls_config:
+              ca_file: /etc/prometheus/secrets/ca-cert/ca.cert
+            static_configs:
+              - targets: [ 'ilsiamkeyk21in.service.groupein.local:8443', 'ilsiamkeyk22in.service.groupein.local:8443', 'ilsiamkeyk23in.service.groupein.local:8443' ]
+          - job_name: keycloak-siam-preprod-metrics
+            scheme: https
+            metrics_path: /auth/metrics
+            tls_config:
+              ca_file: /etc/prometheus/secrets/ca-cert/ca.cert
+            static_configs:
+              - targets: [ 'qlsiamkeyk21in.service.groupein.local:8443', 'qlsiamkeyk22in.service.groupein.local:8443', 'qlsiamkeyk23in.service.groupein.local:8443' ]
+            relabel_configs:
+              - source_labels: [job]
+                regex: (.*)-metrics
+                target_label: job
+                replacement: $1
+                action: replace
+          - job_name: keycloak-siam-preprod-realm-metrics
+            scheme: https
+            metrics_path: /auth/realms/master/metrics
+            tls_config:
+              ca_file: /etc/prometheus/secrets/ca-cert/ca.cert
+            static_configs:
+              - targets: [ 'qlsiamkeyk21in.service.groupein.local:8443', 'qlsiamkeyk22in.service.groupein.local:8443', 'qlsiamkeyk23in.service.groupein.local:8443' ]
+            relabel_configs:
+              - source_labels: [job]
+                regex: (.*)-realm-metrics
+                target_label: job
+                replacement: $1
+                action: replace
+          - job_name: keycloak-siam-prod
+            scheme: https
+            metrics_path: /auth/metrics
+            tls_config:
+              ca_file: /etc/prometheus/secrets/ca-cert/ca.cert
+            static_configs:
+              - targets: [ 'plsiamkeyk21in.service.groupein.local:8443', 'plsiamkeyk22in.service.groupein.local:8443', 'plsiamkeyk23in.service.groupein.local:8443' ]
+
